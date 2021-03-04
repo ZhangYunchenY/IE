@@ -67,7 +67,7 @@ def conver_answer_to_label(content, answer):
     start_index = content.find(answer)
     end_index = start_index + len(answer) - 1
     # 如果要从content中获取字串 则需要 content[start_index: end_index+1]
-    label[start_index: end_index + 1] = BIO_DICT["I"]
+    label[start_index: end_index + 1] = [BIO_DICT["I"] for index in range(len(answer))]
     label[start_index] = BIO_DICT["B"]
     return label
 
@@ -75,7 +75,7 @@ def conver_answer_to_label(content, answer):
 def read_examples(examples_path):
     examples = []
     with open(examples_path, mode='r') as reader:
-        read = reader.readline()
+        read = reader.read()
         examples_dict = json.loads(read)
     for item in tqdm(examples_dict["documents"], desc='Processing examples'):
         content = ""
