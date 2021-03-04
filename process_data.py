@@ -8,5 +8,6 @@ UNLABELED_DATA_SAVE_PATH = './_data/unlabeled_content.json'
 
 
 if __name__ == '__main__':
-    data_reader_json(DATA_PATH, DATA_SAVE_PATH)
-    data_reader_json(UNLABELED_DATA_PATH, UNLABELED_DATA_SAVE_PATH)
+    format_json(DATA_PATH, DATA_SAVE_PATH)
+    format_json(UNLABELED_DATA_PATH, UNLABELED_DATA_SAVE_PATH)
+    examples = read_examples(DATA_SAVE_PATH)
