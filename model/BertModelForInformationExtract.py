@@ -3,13 +3,14 @@ import torch.nn as nn
 from transformers import BertModel
 
 
-class BertMRCBIO(nn.Module):
-    def __init__(self, config, head_mask, head_word_mask=None, bio_num=3):
-        super(BertMRCBIO, self).__init__()
+class BertMRC4BIO(nn.Module):
+    def __init__(self, config, model_name, bio_num=3):
+        super(BertMRC4BIO, self).__init__()
         self.bio_num = bio_num
-        self.head_mask = head_mask
-        self.head_word_mask = head_word_mask  # 最后调整关于中心词的mask
-        self.bert = BertModel.from_pretrained('bert-base-chinese', config=config, add_pooling_layer=False)
+        # self.head_mask = head_mask
+        self.model_name = model_name
+        # self.head_word_mask = head_word_mask  # 最后调整关于中心词的mask
+        self.bert = BertModel.from_pretrained(self.model_name, config=config, add_pooling_layer=False)
         self.hidden_size = config.hidden_size
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.bio_classifier = nn.Linear(self.hidden_size, self.bio_num)  # 用于BIO标注

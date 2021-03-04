@@ -18,11 +18,13 @@ class Example:
                  key: str,
                  question: str,
                  content: str,
+                 answer: str,
                  label: list
                  ):
         self.key = key
         self.question = question
         self.content = content
+        self.answer = answer
         self.label = label
 
 
@@ -31,10 +33,13 @@ class Feature:
                  input_ids,
                  attention_masks,
                  token_type_ids,
-                 labels):
+                 labels,
+                 head_mask=None
+                 ):
         self.input_ids = input_ids
         self.attention_masks = attention_masks
         self.token_type_ids = token_type_ids
+        self.head_mask = head_mask
         self.labels = labels
 
 
@@ -50,7 +55,7 @@ def format_json(data_path, save_path):
         writer.write(json.dumps(documents, indent=2, ensure_ascii=False))
 
 
-def pkl_writer(path, features):
+def pkl_writer(features, path):
     with open(path, mode='wb') as writer:
         pickle.dump(features, writer)
 
@@ -87,7 +92,8 @@ def read_examples(examples_path):
                 question = question_answers_dict["question"]
                 key = item["key"]
                 label = conver_answer_to_label(content, answer)
-                example = Example(key=key, question=question, content=content, label=label)
+                example = Example(key=key, question=question, answer=answer,
+                                  content=content, label=label)
                 examples.append(example)
     return examples
 
@@ -97,20 +103,32 @@ def split_examples(examples):
     return train_examples, dev_examples
 
 
+def create_head_mask(example):
+    question = example.question
+    content = example.content
+    # [CLS] question [SEP] content [SEP]
+    mask_4_question = [0 for i in range(len(question))]
+    mask_4_content = [1 for i in range(len(content))]
+    heed_mask = [0] + mask_4_question + [0] + mask_4_content + [0]
+    return heed_mask
+
+
 def convert_examples_to_features(examples: Example, model_name):
-    questions, content, labels = [], [], []
+    questions, contents, labels, head_masks = [], [], [], []
     for example in tqdm(examples, desc='Reading examples'):
         questions.append(example.question)
-        content.append(example.content)
+        contents.append(example.content)
         labels.append(example.label)
+        head_mask = create_head_mask(example)
+        head_masks.append(head_mask)
     print("===== Encoding... =====")
     tokenizer = BertTokenizer.from_pretrained(model_name)
-    encoded = tokenizer(questions, content, truncation=True, padding=True)
+    encoded = tokenizer(questions, contents, truncation=True, padding=True)
     input_ids = encoded['input_ids']
     attention_mask = encoded['attention_mask']
     token_type_ids = encoded['token_type_ids']
     features = Feature(input_ids=input_ids, attention_masks=attention_mask,
-                       token_type_ids=token_type_ids, labels=labels)
+                       token_type_ids=token_type_ids, head_mask=head_masks, labels=labels)
     return features
 
 
