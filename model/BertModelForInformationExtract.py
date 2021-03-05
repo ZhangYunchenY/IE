@@ -24,8 +24,9 @@ class BertMRC4BIO(nn.Module):
             return_dict=None
         )
         sequence_output = outputs[0]
-        sequence_without_head = torch.matmul(sequence_output, head_mask)
-        token_logits = self.bio_classifier(sequence_without_head)
+        head_mask_index = head_mask.view(-1) == 1
+        sequence_logits = sequence_output.view(-1, self.bio_num)[head_mask_index]
+        token_logits = self.bio_classifier(sequence_logits)
         if labels is not None:
             labels = labels.float()
             loss_function = nn.CrossEntropyLoss()

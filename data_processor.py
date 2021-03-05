@@ -2,6 +2,7 @@ import json
 import torch
 import pickle
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 from transformers import BertTokenizer
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.model_selection import train_test_split
@@ -19,7 +20,7 @@ class Example:
                  question: str,
                  content: str,
                  answer: str,
-                 label: list
+                 label=None
                  ):
         self.key = key
         self.question = question
@@ -66,6 +67,38 @@ def pkl_reader(path):
         return feature
 
 
+def max_sentence_len(examples):
+    max_len = 0
+    normal_sentence_num = 0
+    abnormal_sentence_num = 0
+    for example in tqdm(examples, desc='Calculating max sentence length'):
+        length = len(example.question) + len(example.content)
+        if length <= 256:
+            normal_sentence_num += 1
+        else:
+            abnormal_sentence_num += 1
+        if length > max_len:
+            max_len = length
+        else:
+            ...
+    return max_len, normal_sentence_num, abnormal_sentence_num
+
+
+def analysis_data_distribution(examples):
+    num_sentence_length = [i for i in range(1000)]
+    _0_list = [0 for i in range(1000)]
+    num_dic = dict(zip(num_sentence_length, _0_list))
+    for example in tqdm(examples, desc='Analysis data distribution:'):
+        length = len(example.question) + len(example.content)
+        num_dic[length] += 1
+    x_label = num_dic.keys()
+    y_label = num_dic.values()
+    plt.bar(x_label, y_label)
+    plt.xlabel('sentence length')
+    plt.ylabel('num of sentence')
+    plt.show()
+
+
 def conver_answer_to_label(content, answer):
     assert answer in content
     label = [BIO_DICT["O"] for index in range(len(content))]
@@ -103,10 +136,24 @@ def split_examples(examples):
     return train_examples, dev_examples
 
 
+def padding(examples, max_len):
+    padded_examples = []
+    for example in tqdm(examples, desc='Padding'):
+        length = len(example.question) + len(example.content)
+        if length <= max_len:
+            pad_list = ['[PAD]' for i in range(max_len-length)]
+            pad_str = ' '.join(pad_list)
+            example.content += pad_str
+            new_example = Example(example.key, example.question, example.content,
+                                  example.answer, example.label)
+            padded_examples.append(new_example)
+    return padded_examples
+
+
 def create_head_mask(example):
     question = example.question
     content = example.content
-    # [CLS] question [SEP] content [SEP]
+    # [CLS] question [SEP] content [SEP] [PAD] [PAD]
     mask_4_question = [0 for i in range(len(question))]
     mask_4_content = [1 for i in range(len(content))]
     heed_mask = [0] + mask_4_question + [0] + mask_4_content + [0]

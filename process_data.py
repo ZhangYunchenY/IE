@@ -1,5 +1,6 @@
 from IE.data_processor import *
 
+MAX_LEN = 256
 MODEL_NAME = 'bert-base-chinese'
 DATA_PATH = './_data/labed_data.json'
 DATA_SAVE_PATH = './_data/processed_data.json'
@@ -14,7 +15,16 @@ if __name__ == '__main__':
     # format_json(UNLABELED_DATA_PATH, UNLABELED_DATA_SAVE_PATH)
     examples = read_examples(DATA_SAVE_PATH)
     train_examples, dev_examples = split_examples(examples)
-    train_features = convert_examples_to_features(train_examples, MODEL_NAME)
-    dev_features = convert_examples_to_features(dev_examples, MODEL_NAME)
-    pkl_writer(train_features, TRAIN_FEATURES_PATH)
-    pkl_writer(dev_features, DEV_FEATURES_PATH)
+    train_examples = padding(train_examples, MAX_LEN)
+    dev_examples = padding(dev_examples, MAX_LEN)
+    train_sequence_len, train_sentence_num, train_ab_sentence_num = max_sentence_len(train_examples)
+    dev_sequence_len, dev_sentence_num, dev_ab_sentence_num = max_sentence_len(dev_examples)
+    print(f'Train sentence max length: {train_sequence_len}, Dev sentence max length: {dev_sequence_len}')
+    print(f'Train normal sentence num: {train_sentence_num}, abnormal sentence num: {train_ab_sentence_num}')
+    print(f'Dev normal sentence num: {dev_sentence_num}, abnormal sentence num: {dev_ab_sentence_num}')
+    analysis_data_distribution(train_examples)
+    analysis_data_distribution(dev_examples)
+    # train_features = convert_examples_to_features(train_examples, MODEL_NAME)
+    # dev_features = convert_examples_to_features(dev_examples, MODEL_NAME)
+    # pkl_writer(train_features, TRAIN_FEATURES_PATH)
+    # pkl_writer(dev_features, DEV_FEATURES_PATH)
