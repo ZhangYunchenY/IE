@@ -136,18 +136,16 @@ def split_examples(examples):
     return train_examples, dev_examples
 
 
-def padding(examples, max_len):
-    padded_examples = []
-    for example in tqdm(examples, desc='Padding'):
-        length = len(example.question) + len(example.content)
-        if length <= max_len:
-            pad_list = ['[PAD]' for i in range(max_len-length)]
-            pad_str = ' '.join(pad_list)
-            example.content += pad_str
-            new_example = Example(example.key, example.question, example.content,
-                                  example.answer, example.label)
-            padded_examples.append(new_example)
-    return padded_examples
+def padding(head_masks, labels, max_len):
+    padded_head_masks, padded_labels = [], []
+    for head_mask, label in tqdm(zip(head_masks, labels), total=len(head_masks), desc='Padding'):
+        pad_4_head_mask = [0 for i in range(max_len - len(head_mask))]
+        pad_4_label = [0 for i in range(max_len - len(label))]
+        padded_head_mask = head_mask + pad_4_head_mask
+        padded_label = label + pad_4_label
+        padded_head_masks.append(padded_head_mask)
+        padded_labels.append(padded_label)
+    return padded_head_masks, padded_labels
 
 
 def create_head_mask(example):
@@ -160,7 +158,18 @@ def create_head_mask(example):
     return heed_mask
 
 
-def convert_examples_to_features(examples: Example, model_name):
+def example_filter(examples, max_length):
+    new_examples = []
+    for example in tqdm(examples, desc='Filter examples'):
+        length = len(example.question) + len(example.content)
+        if length <= max_length:
+            new_examples.append(example)
+        else:
+            ...
+    return new_examples
+
+
+def convert_examples_to_features(examples: Example, model_name, max_length):
     questions, contents, labels, head_masks = [], [], [], []
     for example in tqdm(examples, desc='Reading examples'):
         questions.append(example.question)
@@ -170,10 +179,17 @@ def convert_examples_to_features(examples: Example, model_name):
         head_masks.append(head_mask)
     print("===== Encoding... =====")
     tokenizer = BertTokenizer.from_pretrained(model_name)
-    encoded = tokenizer(questions, contents, truncation=True, padding=True)
+    encoded = tokenizer(questions, contents, truncation=True, padding=True, max_length=max_length)
     input_ids = encoded['input_ids']
     attention_mask = encoded['attention_mask']
     token_type_ids = encoded['token_type_ids']
+    length = len(input_ids[0])
+    assert len(input_ids) == len(attention_mask) == len(token_type_ids)
+
+    assert len(input_ids) == len(attention_mask) == len(token_type_ids) == \
+           len(head_masks) == len(labels)
+    assert len(input_ids[0]) == len(attention_mask[0]) == len(token_type_ids[0]) == \
+           len(head_masks[0]) == len(labels[0])
     features = Feature(input_ids=input_ids, attention_masks=attention_mask,
                        token_type_ids=token_type_ids, head_mask=head_masks, labels=labels)
     return features
