@@ -136,11 +136,11 @@ def split_examples(examples):
     return train_examples, dev_examples
 
 
-def padding(head_masks, labels, max_len):
+def padding(head_masks, labels, max_length):
     padded_head_masks, padded_labels = [], []
     for head_mask, label in tqdm(zip(head_masks, labels), total=len(head_masks), desc='Padding'):
-        pad_4_head_mask = [0 for i in range(max_len - len(head_mask))]
-        pad_4_label = [0 for i in range(max_len - len(label))]
+        pad_4_head_mask = [0 for i in range(max_length - len(head_mask))]
+        pad_4_label = [0 for i in range(max_length - len(label))]
         padded_head_mask = head_mask + pad_4_head_mask
         padded_label = label + pad_4_label
         padded_head_masks.append(padded_head_mask)
@@ -185,7 +185,7 @@ def convert_examples_to_features(examples: Example, model_name, max_length):
     token_type_ids = encoded['token_type_ids']
     length = len(input_ids[0])
     assert len(input_ids) == len(attention_mask) == len(token_type_ids)
-
+    head_masks, labels = padding(head_masks, labels, length)
     assert len(input_ids) == len(attention_mask) == len(token_type_ids) == \
            len(head_masks) == len(labels)
     assert len(input_ids[0]) == len(attention_mask[0]) == len(token_type_ids[0]) == \
