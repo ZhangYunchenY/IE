@@ -143,6 +143,10 @@ def padding(head_masks, labels, max_length):
         pad_4_label = [0 for i in range(max_length - len(label))]
         padded_head_mask = head_mask + pad_4_head_mask
         padded_label = label + pad_4_label
+        if len(padded_head_mask) != max_length:
+            print(head_mask)
+            print(label)
+        assert len(padded_label) == len(padded_head_mask) == max_length
         padded_head_masks.append(padded_head_mask)
         padded_labels.append(padded_label)
     return padded_head_masks, padded_labels
@@ -154,8 +158,14 @@ def create_head_mask(example):
     # [CLS] question [SEP] content [SEP] [PAD] [PAD]
     mask_4_question = [0 for i in range(len(question))]
     mask_4_content = [1 for i in range(len(content))]
-    heed_mask = [0] + mask_4_question + [0] + mask_4_content + [0]
-    return heed_mask
+    head_mask = [0] + mask_4_question + [0] + mask_4_content + [0]
+    if len(head_mask) == 251:
+        print(question, content)
+        tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
+        encoded = tokenizer(question, content, truncation=True, padding=True, max_length=256)
+        print(len(encoded['input_ids']))
+        print(tokenizer.decode(encoded['input_ids']))
+    return head_mask
 
 
 def example_filter(examples, max_length):
@@ -188,8 +198,6 @@ def convert_examples_to_features(examples: Example, model_name, max_length):
     head_masks, labels = padding(head_masks, labels, length)
     assert len(input_ids) == len(attention_mask) == len(token_type_ids) == \
            len(head_masks) == len(labels)
-    assert len(input_ids[0]) == len(attention_mask[0]) == len(token_type_ids[0]) == \
-           len(head_masks[0]) == len(labels[0])
     features = Feature(input_ids=input_ids, attention_masks=attention_mask,
                        token_type_ids=token_type_ids, head_mask=head_masks, labels=labels)
     return features
@@ -199,7 +207,9 @@ def create_dataloader(features, batch_size):
     input_ids = torch.tensor(features.input_ids)
     attention_masks = torch.tensor(features.attention_masks)
     token_type_ids = torch.tensor(features.token_type_ids)
+    head_mask = torch.tensor(features.head_mask)
     labels = torch.tensor(features.labels)
-    dataset = TensorDataset(input_ids, attention_masks, token_type_ids, labels)
+    dataset = TensorDataset(input_ids, attention_masks, token_type_ids,
+                            head_mask, labels)
     dataloader = DataLoader(dataset, batch_size=batch_size)
     return dataloader
