@@ -3,7 +3,7 @@ import torch
 import pickle
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-from transformers import BertTokenizer
+from transformers import BertTokenizerFast
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.model_selection import train_test_split
 
@@ -20,13 +20,13 @@ class Example:
                  question: str,
                  content: str,
                  answer: str,
-                 label=None
+                 answer_ids: list
                  ):
         self.key = key
         self.question = question
         self.content = content
         self.answer = answer
-        self.label = label
+        self.answer_ids = answer_ids
 
 
 class Feature:
@@ -99,19 +99,20 @@ def analysis_data_distribution(examples):
     plt.show()
 
 
-def conver_answer_to_label(content, answer):
-    assert answer in content
-    label = [BIO_DICT["O"] for index in range(len(content))]
-    start_index = content.find(answer)
-    end_index = start_index + len(answer) - 1
-    # 如果要从content中获取字串 则需要 content[start_index: end_index+1]
-    label[start_index: end_index + 1] = [BIO_DICT["I"] for index in range(len(answer))]
-    label[start_index] = BIO_DICT["B"]
-    return label
+# def conver_answer_to_label(content, answer):
+#     assert answer in content
+#     label = [BIO_DICT["O"] for index in range(len(content))]
+#     start_index = content.find(answer)
+#     end_index = start_index + len(answer) - 1
+#     # 如果要从content中获取字串 则需要 content[start_index: end_index+1]
+#     label[start_index: end_index + 1] = [BIO_DICT["I"] for index in range(len(answer))]
+#     label[start_index] = BIO_DICT["B"]
+#     return label
 
 
 def read_examples(examples_path):
     examples = []
+    tokenizer = BertTokenizerFast.from_pretrained('bert-base-chinese')
     with open(examples_path, mode='r') as reader:
         read = reader.read()
         examples_dict = json.loads(read)
@@ -124,9 +125,9 @@ def read_examples(examples_path):
                 answer = answer_dict["text"]
                 question = question_answers_dict["question"]
                 key = item["key"]
-                label = conver_answer_to_label(content, answer)
+                answer_ids = tokenizer(answer)['input_ids']
                 example = Example(key=key, question=question, answer=answer,
-                                  content=content, label=label)
+                                  content=content, answer_ids=answer_ids)
                 examples.append(example)
     return examples
 
@@ -136,36 +137,28 @@ def split_examples(examples):
     return train_examples, dev_examples
 
 
-def padding(head_masks, labels, max_length):
-    padded_head_masks, padded_labels = [], []
-    for head_mask, label in tqdm(zip(head_masks, labels), total=len(head_masks), desc='Padding'):
-        pad_4_head_mask = [0 for i in range(max_length - len(head_mask))]
-        pad_4_label = [0 for i in range(max_length - len(label))]
-        padded_head_mask = head_mask + pad_4_head_mask
-        padded_label = label + pad_4_label
-        if len(padded_head_mask) != max_length:
-            print(head_mask)
-            print(label)
-        assert len(padded_label) == len(padded_head_mask) == max_length
-        padded_head_masks.append(padded_head_mask)
-        padded_labels.append(padded_label)
-    return padded_head_masks, padded_labels
+def padding(labels, max_length):
+    new_labels = []
+    for label in tqdm(labels, desc='Padding labels'):
+        empty_label = [BIO_DICT['O'] for i in range(max_length)]
+        start_index = label[0]
+        end_index = label[-1]
+        assert end_index - start_index == len(label) + 1
+        empty_label[start_index: end_index + 1] = [BIO_DICT['I'] for i in range(end_index - start_index + 1)]
+        empty_label[start_index] = BIO_DICT['B']
+        new_labels.append(empty_label)
+    return new_labels
 
 
-def create_head_mask(example):
-    question = example.question
-    content = example.content
+def create_head_mask(token_type_ids):
     # [CLS] question [SEP] content [SEP] [PAD] [PAD]
-    mask_4_question = [0 for i in range(len(question))]
-    mask_4_content = [1 for i in range(len(content))]
-    head_mask = [0] + mask_4_question + [0] + mask_4_content + [0]
-    if len(head_mask) == 251:
-        print(question, content)
-        tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
-        encoded = tokenizer(question, content, truncation=True, padding=True, max_length=256)
-        print(len(encoded['input_ids']))
-        print(tokenizer.decode(encoded['input_ids']))
-    return head_mask
+    head_masks = []
+    for token_type_id in tqdm(token_type_ids, desc='Creating head masks'):
+        _1_index = [i for i, x in enumerate(token_type_id) if x == 1]
+        token_type_id[_1_index[-1]] = 0
+        head_mask = token_type_id
+        head_masks.append(head_mask)
+    return head_masks
 
 
 def example_filter(examples, max_length):
@@ -180,22 +173,26 @@ def example_filter(examples, max_length):
 
 
 def convert_examples_to_features(examples: Example, model_name, max_length):
-    questions, contents, labels, head_masks = [], [], [], []
+    questions, contents, answer_ids = [], [], []
+    labels = []
     for example in tqdm(examples, desc='Reading examples'):
         questions.append(example.question)
         contents.append(example.content)
-        labels.append(example.label)
-        head_mask = create_head_mask(example)
-        head_masks.append(head_mask)
+        answer_ids.append(example.answer_ids)
     print("===== Encoding... =====")
-    tokenizer = BertTokenizer.from_pretrained(model_name)
+    tokenizer = BertTokenizerFast.from_pretrained(model_name)
     encoded = tokenizer(questions, contents, truncation=True, padding=True, max_length=max_length)
     input_ids = encoded['input_ids']
     attention_mask = encoded['attention_mask']
     token_type_ids = encoded['token_type_ids']
+    for input_id, answer_id in tqdm(zip(input_ids, answer_ids), desc='Create labels', total=len(input_ids)):
+        index_dict = dict((value, idx) for idx, value in enumerate(input_id))
+        index_list = [index_dict[x] for x in answer_id]
+        labels.append(index_list)
     length = len(input_ids[0])
+    labels = padding(labels, length)
     assert len(input_ids) == len(attention_mask) == len(token_type_ids)
-    head_masks, labels = padding(head_masks, labels, length)
+    head_masks = create_head_mask(token_type_ids)
     assert len(input_ids) == len(attention_mask) == len(token_type_ids) == \
            len(head_masks) == len(labels)
     features = Feature(input_ids=input_ids, attention_masks=attention_mask,
