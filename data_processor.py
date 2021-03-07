@@ -201,9 +201,6 @@ def convert_examples_to_features(examples: Example, model_name, max_length):
                 index_list.append(temp_list)
             else:
                 ...
-        if index_list == []:
-            print(input_id)
-            print(answer_id)
         labels.append(index_list)
     length = len(input_ids[0])
     labels = padding(labels, length)
