@@ -35,6 +35,7 @@ class Feature:
                  attention_masks,
                  token_type_ids,
                  labels,
+                 offsets,
                  head_mask=None
                  ):
         self.input_ids = input_ids
@@ -42,6 +43,7 @@ class Feature:
         self.token_type_ids = token_type_ids
         self.head_mask = head_mask
         self.labels = labels
+        self.offsets = offsets
 
 
 def format_json(data_path, save_path):
@@ -138,14 +140,15 @@ def split_examples(examples):
 
 
 def padding(labels, max_length):
+    # 标注
     new_labels = []
     for label in tqdm(labels, desc='Padding labels'):
         empty_label = [BIO_DICT['O'] for i in range(max_length)]
-        start_index = label[0]
-        end_index = label[-1]
-        assert end_index - start_index == len(label) + 1
-        empty_label[start_index: end_index + 1] = [BIO_DICT['I'] for i in range(end_index - start_index + 1)]
-        empty_label[start_index] = BIO_DICT['B']
+        for index in label:
+            start_index = index[0]
+            end_index = index[-1]
+            empty_label[start_index: end_index + 1] = [BIO_DICT['I'] for i in range(end_index - start_index + 1)]
+            empty_label[start_index] = BIO_DICT['B']
         new_labels.append(empty_label)
     return new_labels
 
@@ -174,7 +177,7 @@ def example_filter(examples, max_length):
 
 def convert_examples_to_features(examples: Example, model_name, max_length):
     questions, contents, answer_ids = [], [], []
-    labels = []
+    labels, offsets = [], []
     for example in tqdm(examples, desc='Reading examples'):
         questions.append(example.question)
         contents.append(example.content)
@@ -185,9 +188,22 @@ def convert_examples_to_features(examples: Example, model_name, max_length):
     input_ids = encoded['input_ids']
     attention_mask = encoded['attention_mask']
     token_type_ids = encoded['token_type_ids']
+    for encoding in tqdm(encoded.encodings, desc='Building offset'):
+        offset = encoding.offsets
+        offsets.append(offset)
     for input_id, answer_id in tqdm(zip(input_ids, answer_ids), desc='Create labels', total=len(input_ids)):
-        index_dict = dict((value, idx) for idx, value in enumerate(input_id))
-        index_list = [index_dict[x] for x in answer_id]
+        answer_id = answer_id[1: -1]
+        appearance_index = list(filter(lambda x: input_id[x] == answer_id[0], list(range(len(input_id)))))
+        index_list = []
+        for index in appearance_index:
+            if input_id[index: index+len(answer_id)] == answer_id:
+                temp_list = list(range(index, index+len(answer_id)))
+                index_list.append(temp_list)
+            else:
+                ...
+        if index_list == []:
+            print(input_id)
+            print(answer_id)
         labels.append(index_list)
     length = len(input_ids[0])
     labels = padding(labels, length)
@@ -196,7 +212,8 @@ def convert_examples_to_features(examples: Example, model_name, max_length):
     assert len(input_ids) == len(attention_mask) == len(token_type_ids) == \
            len(head_masks) == len(labels)
     features = Feature(input_ids=input_ids, attention_masks=attention_mask,
-                       token_type_ids=token_type_ids, head_mask=head_masks, labels=labels)
+                       token_type_ids=token_type_ids, head_mask=head_masks,
+                       labels=labels, offsets=offsets)
     return features
 
 
