@@ -24,15 +24,15 @@ class BertMRC4BIO(nn.Module):
             return_dict=None
         )
         sequence_output = outputs[0]
-        head_mask_index = head_mask.view(-1) == 1
-        sequence_logits = sequence_output.view(-1, self.bio_num)[head_mask_index]
-        token_logits = self.bio_classifier(sequence_logits)
+        last_bert_layer = self.dropout(sequence_output)
+        logits = self.bio_classifier(last_bert_layer)  # batch_size * seq_len * num_label
         if labels is not None:
-            labels = labels.float()
+            head_mask_index = head_mask.view(-1) == 1
+            sequence_logits = logits.view(-1, self.bio_num)[head_mask_index]
+            labels = labels.long()
+            labels = labels.view(-1)[head_mask_index]
             loss_function = nn.CrossEntropyLoss()
-            loss = loss_function(token_logits, labels)
+            loss = loss_function(sequence_logits, labels)
             return loss
         else:
-            softmax_function = nn.Softmax(dim=1)
-            logits = softmax_function(token_logits)
-            return logits
+            return logits  # batch_size * seq_len * num_label
