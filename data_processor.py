@@ -1,4 +1,5 @@
 import json
+import copy
 import torch
 import pickle
 from tqdm import tqdm
@@ -158,8 +159,8 @@ def create_head_mask(token_type_ids):
     head_masks = []
     for token_type_id in tqdm(token_type_ids, desc='Creating head masks'):
         _1_index = [i for i, x in enumerate(token_type_id) if x == 1]
-        token_type_id[_1_index[-1]] = 0
-        head_mask = token_type_id
+        head_mask = copy.deepcopy(token_type_id)
+        head_mask[_1_index[-1]] = 0
         head_masks.append(head_mask)
     return head_masks
 
