@@ -79,16 +79,32 @@ def validation(model, dev_dataloader, examples_length):
             # predictions = predictions.detach().cpu().numpy().tolist()
             # detached_labels = d_labels.detach().cpu().numpy().tolist()
             # detached_head_masks = d_head_masks.detach().cpu().numpy().tolist()
-            for prediction, detached_label, detached_head_mask in zip(predictions, d_labels, d_head_masks):
+            for prediction, detached_head_mask in zip(predictions, d_head_masks):
+                pre_spans = []
                 head_mask_index = detached_head_mask == 1
-                prediction = prediction[head_mask_index]
-                detached_label = detached_label[head_mask_index]
-                pre_B_indexs = list(filter(lambda x: prediction[x] == P.BIO_DICT['B'], list(range(len(prediction)))))
-                pre_I_indexs = list(filter(lambda x: prediction[x] == P.BIO_DICT['I'], list(range(len(prediction)))))
-                pre_indexs = (pre_B_indexs + pre_I_indexs).sort()
-                true_B_indexs = list(filter(lambda x: detached_label[x] == P.BIO_DICT['B'], list(range(len(detached_label)))))
-                true_I_indexs = list(filter(lambda x: detached_label[x] == P.BIO_DICT['I'], list(range(len(detached_label)))))
-                true_indexs = (true_B_indexs + true_I_indexs).sort()
+                prediction = prediction[head_mask_index].detach().cpu().numpy().tolist()
+                FLAG = -1
+                for index, value in enumerate(prediction):
+                    if value == P.BIO_DICT['B']:
+                        start_index = index
+                        FLAG = P.BIO_DICT['B']
+                    elif value == P.BIO_DICT['O'] and FLAG == P.BIO_DICT['B']:
+                        end_index = index
+                        pre_spans.append([start_index, end_index])
+                        FLAG = P.BIO_DICT['O']
+                    elif value == P.BIO_DICT['I'] and FLAG == P.BIO_DICT['B']:
+                        FLAG = P.BIO_DICT['I']
+                    elif value == P.BIO_DICT['I'] and FLAG == P.BIO_DICT['I']:
+                        FLAG = P.BIO_DICT['I']
+                    elif value == P.BIO_DICT['O'] and FLAG == P.BIO_DICT['I']:
+                        end_index = index
+                        pre_spans.append([start_index, end_index])
+                        FLAG = P.BIO_DICT['O']
+
+                # pre_B_indexs = list(filter(lambda x: prediction[x] == P.BIO_DICT['B'], list(range(len(prediction)))))
+                # pre_I_indexs = list(filter(lambda x: prediction[x] == P.BIO_DICT['I'], list(range(len(prediction)))))
+                # pre_indexs = (pre_B_indexs + pre_I_indexs).sort()
+
 
     return model
 
