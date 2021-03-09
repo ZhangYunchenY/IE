@@ -20,7 +20,7 @@ class Example:
                  key: str,
                  question: str,
                  content: str,
-                 answer: str,
+                 answer: list,
                  answer_ids: list
                  ):
         self.key = key
@@ -124,14 +124,16 @@ def read_examples(examples_path):
         for sentence in item["document"]:
             content += sentence["text"]
         for question_answers_dict in item["qas"][0]:
+            question = question_answers_dict["question"]
+            key = item["key"]
+            answer = []
+            answer_ids = []
             for answer_dict in question_answers_dict["answers"]:
-                answer = answer_dict["text"]
-                question = question_answers_dict["question"]
-                key = item["key"]
-                answer_ids = tokenizer(answer)['input_ids']
-                example = Example(key=key, question=question, answer=answer,
-                                  content=content, answer_ids=answer_ids)
-                examples.append(example)
+                answer.append(answer_dict["text"])
+                answer_ids.append(tokenizer(answer)['input_ids'][0])
+            example = Example(key=key, question=question, answer=answer,
+                              content=content, answer_ids=answer_ids)
+            examples.append(example)
     return examples
 
 
@@ -193,15 +195,18 @@ def convert_examples_to_features(examples: Example, model_name, max_length):
         offset = encoding.offsets
         offsets.append(offset)
     for input_id, answer_id in tqdm(zip(input_ids, answer_ids), desc='Create labels', total=len(input_ids)):
-        answer_id = answer_id[1: -1]
-        appearance_index = list(filter(lambda x: input_id[x] == answer_id[0], list(range(len(input_id)))))
+        # 将问题的答案全部标出
         index_list = []
-        for index in appearance_index:
-            if input_id[index: index+len(answer_id)] == answer_id:
-                temp_list = list(range(index, index+len(answer_id)))
-                index_list.append(temp_list)
-            else:
-                ...
+        for aid in answer_id:
+            aid = aid[1: -1]
+            appearance_index = list(filter(lambda x: input_id[x] == aid[0], list(range(len(input_id)))))
+            # 为了避免产生歧义，将句子中出现和答案相同的字符串全部标出
+            for index in appearance_index:
+                if input_id[index: index + len(aid)] == aid:
+                    temp_list = list(range(index, index + len(aid)))
+                    index_list.append(temp_list)
+                else:
+                    ...
         labels.append(index_list)
     length = len(input_ids[0])
     labels = padding(labels, length)
@@ -225,3 +230,29 @@ def create_dataloader(features, batch_size):
                             head_mask, labels)
     dataloader = DataLoader(dataset, batch_size=batch_size)
     return dataloader
+
+
+def bio_inference(prediction):
+    pre_spans = []
+    FLAG = -1
+    for index, value in enumerate(prediction):
+        if value == BIO_DICT['B']:
+            start_index = index
+            FLAG = BIO_DICT['B']
+        elif value == BIO_DICT['B'] and FLAG == BIO_DICT['B']:
+            end_index = index
+            pre_spans.append([start_index, end_index])
+            FLAG = BIO_DICT['B']
+        elif value == BIO_DICT['O'] and FLAG == BIO_DICT['B']:
+            end_index = index
+            pre_spans.append([start_index, end_index])
+            FLAG = BIO_DICT['O']
+        elif value == BIO_DICT['I'] and FLAG == BIO_DICT['B']:
+            FLAG = BIO_DICT['I']
+        elif value == BIO_DICT['I'] and FLAG == BIO_DICT['I']:
+            FLAG = BIO_DICT['I']
+        elif value == BIO_DICT['O'] and FLAG == BIO_DICT['I']:
+            end_index = index
+            pre_spans.append([start_index, end_index])
+            FLAG = BIO_DICT['O']
+    return pre_spans

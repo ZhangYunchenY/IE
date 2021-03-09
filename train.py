@@ -55,11 +55,11 @@ def train(model, train_dataloader):
     return model
 
 
-def validation(model, dev_dataloader, examples_length):
+def validation(model, dev_dataloader):
     model.cuda()
     model.eval()
     dev_epoch_loss = 0
-
+    all_pre_spans_in_content = []
     for step, batch in tqdm(enumerate(dev_dataloader), desc='Validation', total=len(dev_dataloader)):
         batch = tuple(t.cuda() for t in batch)
         d_input_ids, d_attention_masks, d_token_type_ids, d_head_masks, d_labels = batch
@@ -76,34 +76,21 @@ def validation(model, dev_dataloader, examples_length):
             # prediction
             logits = output  # batch_size * seq_len * num_label
             predictions = torch.argmax(logits, dim=2)  # batch_size * seq_len
-            # predictions = predictions.detach().cpu().numpy().tolist()
-            # detached_labels = d_labels.detach().cpu().numpy().tolist()
-            # detached_head_masks = d_head_masks.detach().cpu().numpy().tolist()
-            for prediction, detached_head_mask in zip(predictions, d_head_masks):
-                pre_spans = []
-                head_mask_index = detached_head_mask == 1
+            batch_pre_spans_in_content = []
+            for prediction, d_head_mask, offset in zip(predictions, d_head_masks, dev_features.offsets):
+                head_mask_index = d_head_mask == 1
                 prediction = prediction[head_mask_index].detach().cpu().numpy().tolist()
-                FLAG = -1
-                for index, value in enumerate(prediction):
-                    if value == P.BIO_DICT['B']:
-                        start_index = index
-                        FLAG = P.BIO_DICT['B']
-                    elif value == P.BIO_DICT['O'] and FLAG == P.BIO_DICT['B']:
-                        end_index = index
-                        pre_spans.append([start_index, end_index])
-                        FLAG = P.BIO_DICT['O']
-                    elif value == P.BIO_DICT['I'] and FLAG == P.BIO_DICT['B']:
-                        FLAG = P.BIO_DICT['I']
-                    elif value == P.BIO_DICT['I'] and FLAG == P.BIO_DICT['I']:
-                        FLAG = P.BIO_DICT['I']
-                    elif value == P.BIO_DICT['O'] and FLAG == P.BIO_DICT['I']:
-                        end_index = index
-                        pre_spans.append([start_index, end_index])
-                        FLAG = P.BIO_DICT['O']
-
-                # pre_B_indexs = list(filter(lambda x: prediction[x] == P.BIO_DICT['B'], list(range(len(prediction)))))
-                # pre_I_indexs = list(filter(lambda x: prediction[x] == P.BIO_DICT['I'], list(range(len(prediction)))))
-                # pre_indexs = (pre_B_indexs + pre_I_indexs).sort()
+                offset = torch.tensor(offset)[head_mask_index].detach().cpu().numpy().tolist()
+                pre_spans = P.bio_inference(prediction)  # span start_index, end_index + 1 刚好能够索引出所有字符串
+                pre_spans_4_content = []
+                for span in pre_spans:
+                    start, end = span
+                    start_index_4_content = offset[start][0]
+                    end_index_4_content = offset[end-1][-1]
+                    pre_spans_4_content.append([start_index_4_content, end_index_4_content])
+                batch_pre_spans_in_content.append(pre_spans_4_content)
+        all_pre_spans_in_content.append(batch_pre_spans_in_content)
+    dev_epoch_loss /= len(dev_dataloader)
 
 
     return model
@@ -119,5 +106,5 @@ if __name__ == '__main__':
     model = loading_model(MODEL_NAME)
     for i in range(0, EPOCH):
         # model = train(model, train_dataloader)
-        model = validation(model, dev_dataloader, dev_examples)
+        model = validation(model, dev_dataloader)
         torch.save(model.state_dict(), MODEL_SAVE_PATH + str(i) + MODEL_SUFFIX)
