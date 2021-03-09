@@ -1,3 +1,5 @@
+import sys
+sys.path.append('..')
 import torch
 from tqdm import tqdm
 import torch.nn as nn
@@ -7,8 +9,8 @@ from torch.utils.tensorboard import SummaryWriter
 from IE.model import BertModelForInformationExtract as BIO
 from transformers import BertConfig, AdamW, get_linear_schedule_with_warmup
 
-EPOCH = 5
-BATCH_SIZE = 36
+EPOCH = 50
+BATCH_SIZE = 80
 LOG_PATH = './log'
 DATA_SAVE_PATH = './_data/processed_data.json'
 TRAIN_FEATURE_PATH = './data_pkl/train_features.pkl'
@@ -29,7 +31,7 @@ def train(model, train_dataloader):
     model.cuda()
     # Set optimizer and scheduler
     total_step = EPOCH * len(train_dataloader)
-    optimizer = AdamW(model.parameters(), lr=5e-5, weight_decay=0.01)
+    optimizer = AdamW(model.parameters(), lr=1e-5, weight_decay=0.01)
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=10,
                                                 num_training_steps=total_step)
     # tensor board
@@ -58,6 +60,8 @@ def train(model, train_dataloader):
 def validation(model, dev_dataloader):
     model.cuda()
     model.eval()
+    # tensor board
+    tensor_board_writer = SummaryWriter(LOG_PATH)
     dev_epoch_loss = 0
     all_pre_spans_in_content = []
     for step, batch in tqdm(enumerate(dev_dataloader), desc='Validation', total=len(dev_dataloader)):
@@ -82,6 +86,8 @@ def validation(model, dev_dataloader):
                 prediction = prediction[head_mask_index].detach().cpu().numpy().tolist()
                 offset = torch.tensor(offset)[head_mask_index].detach().cpu().numpy().tolist()
                 pre_spans = P.bio_inference(prediction)  # span start_index, end_index + 1 刚好能够索引出所有字符串
+                # O O B I I I O O O
+                #     S       E
                 pre_spans_4_content = []
                 for span in pre_spans:
                     start, end = span
@@ -89,22 +95,46 @@ def validation(model, dev_dataloader):
                     end_index_4_content = offset[end-1][-1]
                     pre_spans_4_content.append([start_index_4_content, end_index_4_content])
                 batch_pre_spans_in_content.append(pre_spans_4_content)
-        all_pre_spans_in_content.append(batch_pre_spans_in_content)
+        all_pre_spans_in_content += batch_pre_spans_in_content
     dev_epoch_loss /= len(dev_dataloader)
-
-
+    # Calculate PRF
+    denominator_precision, denominator_recall, TP = 0, 0, 0
+    for example, span in zip(dev_examples, all_pre_spans_in_content):
+        true_answer = example.answer
+        denominator_recall += len(true_answer)
+        content = example.content
+        pre_answer = []
+        for spn in span:
+            start_index, end_index = spn
+            pre_answer.append(content[start_index: end_index])
+        for answer in pre_answer:
+            if answer in true_answer:
+                TP += 1
+            else:
+                ...
+        denominator_precision += len(pre_answer)
+    tensor_board_writer.add_scalar('dev_epoch_loss', dev_epoch_loss, i)
+    if denominator_precision != 0:
+        precision = TP / denominator_precision
+        recall = TP / denominator_recall
+        f1 = (2 * recall * precision) / (precision + recall)
+        tensor_board_writer.add_scalar('dev_precision', precision, i)
+        tensor_board_writer.add_scalar('dev_recall', recall, i)
+        tensor_board_writer.add_scalar('dev-f1', f1, i)
+    tensor_board_writer.flush()
     return model
 
 
 if __name__ == '__main__':
     examples = P.read_examples(DATA_SAVE_PATH)
     train_examples, dev_examples = P.split_examples(examples)
+    print(f'Train dataset size: {len(train_examples)}, dev dataset size: {len(dev_examples)}')
     train_features = P.pkl_reader(TRAIN_FEATURE_PATH)
     dev_features = P.pkl_reader(DEV_FEATURE_PATH)
     train_dataloader = P.create_dataloader(train_features, BATCH_SIZE)
     dev_dataloader = P.create_dataloader(dev_features, BATCH_SIZE)
     model = loading_model(MODEL_NAME)
     for i in range(0, EPOCH):
-        # model = train(model, train_dataloader)
+        model = train(model, train_dataloader)
         model = validation(model, dev_dataloader)
         torch.save(model.state_dict(), MODEL_SAVE_PATH + str(i) + MODEL_SUFFIX)
