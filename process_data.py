@@ -13,7 +13,7 @@ DEV_FEATURES_PATH = './data_pkl/dev_features.pkl'
 if __name__ == '__main__':
     # format_json(DATA_PATH, DATA_SAVE_PATH)
     # format_json(UNLABELED_DATA_PATH, UNLABELED_DATA_SAVE_PATH)
-    examples = read_examples(DATA_SAVE_PATH)
+    examples = read_examples(DATA_SAVE_PATH, MODEL_NAME)
     train_examples, dev_examples = split_examples(examples)
     train_sequence_len, train_sentence_num, train_ab_sentence_num = max_sentence_len(train_examples)
     dev_sequence_len, dev_sentence_num, dev_ab_sentence_num = max_sentence_len(dev_examples)

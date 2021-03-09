@@ -1,4 +1,5 @@
 import sys
+
 sys.path.append('..')
 import torch
 from tqdm import tqdm
@@ -10,14 +11,15 @@ from IE.model import BertModelForInformationExtract as BIO
 from transformers import BertConfig, AdamW, get_linear_schedule_with_warmup
 
 EPOCH = 50
-BATCH_SIZE = 80
+BATCH_SIZE = 24
 LOG_PATH = './log'
 DATA_SAVE_PATH = './_data/processed_data.json'
 TRAIN_FEATURE_PATH = './data_pkl/train_features.pkl'
 DEV_FEATURE_PATH = './data_pkl/dev_features.pkl'
 MODEL_SAVE_PATH = './trained_model/MRC4BIO_epoch_'
 MODEL_SUFFIX = '.pt'
-MODEL_NAME = 'bert-base-chinese'
+# MODEL_NAME = 'bert-base-chinese'
+MODEL_NAME = 'hfl/chinese-roberta-wwm-ext-large'
 
 
 def loading_model(model_name):
@@ -57,7 +59,7 @@ def train(model, train_dataloader):
     return model
 
 
-def validation(model, dev_dataloader):
+def validation(model, dev_dataloader, mode, m_features, m_examples):
     model.cuda()
     model.eval()
     # tensor board
@@ -69,7 +71,7 @@ def validation(model, dev_dataloader):
         d_input_ids, d_attention_masks, d_token_type_ids, d_head_masks, d_labels = batch
         with torch.no_grad():
             output = model(d_input_ids, attention_mask=d_attention_masks, token_type_ids=d_token_type_ids,
-                       labels=None, head_mask=d_head_masks)
+                           labels=None, head_mask=d_head_masks)
             # loss
             d_head_mask_index = d_head_masks.view(-1) == 1
             token_logits = output.view(-1, len(P.BIO_DICT))[d_head_mask_index]
@@ -81,7 +83,7 @@ def validation(model, dev_dataloader):
             logits = output  # batch_size * seq_len * num_label
             predictions = torch.argmax(logits, dim=2)  # batch_size * seq_len
             batch_pre_spans_in_content = []
-            for prediction, d_head_mask, offset in zip(predictions, d_head_masks, dev_features.offsets):
+            for prediction, d_head_mask, offset in zip(predictions, d_head_masks, m_features.offsets):
                 head_mask_index = d_head_mask == 1
                 prediction = prediction[head_mask_index].detach().cpu().numpy().tolist()
                 offset = torch.tensor(offset)[head_mask_index].detach().cpu().numpy().tolist()
@@ -92,14 +94,14 @@ def validation(model, dev_dataloader):
                 for span in pre_spans:
                     start, end = span
                     start_index_4_content = offset[start][0]
-                    end_index_4_content = offset[end-1][-1]
+                    end_index_4_content = offset[end - 1][-1]
                     pre_spans_4_content.append([start_index_4_content, end_index_4_content])
                 batch_pre_spans_in_content.append(pre_spans_4_content)
         all_pre_spans_in_content += batch_pre_spans_in_content
     dev_epoch_loss /= len(dev_dataloader)
     # Calculate PRF
     denominator_precision, denominator_recall, TP = 0, 0, 0
-    for example, span in zip(dev_examples, all_pre_spans_in_content):
+    for example, span in zip(m_examples, all_pre_spans_in_content):
         true_answer = example.answer
         denominator_recall += len(true_answer)
         content = example.content
@@ -113,20 +115,20 @@ def validation(model, dev_dataloader):
             else:
                 ...
         denominator_precision += len(pre_answer)
-    tensor_board_writer.add_scalar('dev_epoch_loss', dev_epoch_loss, i)
-    if denominator_precision != 0:
+    tensor_board_writer.add_scalar(mode + '_epoch_loss', dev_epoch_loss, i)
+    if denominator_precision != 0 and denominator_recall != 0 and TP != 0:
         precision = TP / denominator_precision
         recall = TP / denominator_recall
         f1 = (2 * recall * precision) / (precision + recall)
-        tensor_board_writer.add_scalar('dev_precision', precision, i)
-        tensor_board_writer.add_scalar('dev_recall', recall, i)
-        tensor_board_writer.add_scalar('dev-f1', f1, i)
+        tensor_board_writer.add_scalar(mode + '_precision', precision, i)
+        tensor_board_writer.add_scalar(mode + '_recall', recall, i)
+        tensor_board_writer.add_scalar(mode + '_f1', f1, i)
     tensor_board_writer.flush()
     return model
 
 
 if __name__ == '__main__':
-    examples = P.read_examples(DATA_SAVE_PATH)
+    examples = P.read_examples(DATA_SAVE_PATH, 'bert-base-chinese')
     train_examples, dev_examples = P.split_examples(examples)
     print(f'Train dataset size: {len(train_examples)}, dev dataset size: {len(dev_examples)}')
     train_features = P.pkl_reader(TRAIN_FEATURE_PATH)
@@ -136,5 +138,6 @@ if __name__ == '__main__':
     model = loading_model(MODEL_NAME)
     for i in range(0, EPOCH):
         model = train(model, train_dataloader)
-        model = validation(model, dev_dataloader)
+        model = validation(model, train_dataloader, 'train', train_features, train_examples)
+        model = validation(model, dev_dataloader, 'dev', dev_features, dev_examples)
         torch.save(model.state_dict(), MODEL_SAVE_PATH + str(i) + MODEL_SUFFIX)

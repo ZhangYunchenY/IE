@@ -113,9 +113,9 @@ def analysis_data_distribution(examples):
 #     return label
 
 
-def read_examples(examples_path):
+def read_examples(examples_path, model_name):
     examples = []
-    tokenizer = BertTokenizerFast.from_pretrained('bert-base-chinese')
+    tokenizer = BertTokenizerFast.from_pretrained(model_name)
     with open(examples_path, mode='r') as reader:
         read = reader.read()
         examples_dict = json.loads(read)
