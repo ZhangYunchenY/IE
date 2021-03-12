@@ -8,6 +8,7 @@ from transformers import BertTokenizerFast
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.model_selection import train_test_split
 
+
 BIO_DICT = {"B": 0, "I": 1, "O": 2}
 DATA_PATH = './_data/labed_data.json'
 DATA_SAVE_PATH = './_data/processed_data.json'
