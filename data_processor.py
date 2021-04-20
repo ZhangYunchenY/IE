@@ -137,6 +137,30 @@ def read_examples(examples_path, model_name):
     return examples
 
 
+def read_eda_examples(path, model_name):
+    examples = []
+    tokenizer = BertTokenizerFast.from_pretrained(model_name)
+    with open(path, mode='r') as reader:
+        read = reader.readlines()
+    for item in tqdm(read, desc='Processing examples'):
+        item_dic = json.loads(item)
+        content = item_dic['content']
+        question = item_dic['question']
+        answers = item_dic['answer']
+        answer_ids = []
+        for answer in answers:
+            answer_ids.append(tokenizer(answer)['input_ids'])
+        example = Example(
+            key='',
+            question=question,
+            answer=answers,
+            content=content,
+            answer_ids=answer_ids
+        )
+        examples.append(example)
+    return examples
+
+
 def split_examples(examples):
     train_examples, dev_examples = train_test_split(examples, shuffle=True, random_state=626, test_size=0.1)
     return train_examples, dev_examples

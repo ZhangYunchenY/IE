@@ -32,7 +32,8 @@ class BertMRC4BIO(nn.Module):
             # batch_size * seq_len * embedding_size -> [batch_size * seq_len] x 3
             labels = labels.long()
             labels = labels.view(-1)[head_mask_index]
-            loss_function = nn.CrossEntropyLoss()
+            weight = torch.tensor([2.5, 1.5, 1.]).cuda()
+            loss_function = nn.CrossEntropyLoss(weight=weight)
             loss = loss_function(sequence_logits, labels)
             return loss
         else:

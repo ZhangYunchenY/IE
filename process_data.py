@@ -4,16 +4,18 @@ MAX_LENGTH = 256
 MODEL_NAME = 'bert-base-chinese'
 DATA_PATH = './_data/labed_data.json'
 DATA_SAVE_PATH = './_data/processed_data.json'
+EDA_PATH = './_data/cda_data.json'
 UNLABELED_DATA_PATH = './_data/unlabeled_data_dir/content.json'
 UNLABELED_DATA_SAVE_PATH = './_data/unlabeled_content.json'
-TRAIN_FEATURES_PATH = './data_pkl/train_features.pkl'
-DEV_FEATURES_PATH = './data_pkl/dev_features.pkl'
+TRAIN_FEATURES_PATH = './data_pkl/cda_train_features.pkl'
+DEV_FEATURES_PATH = './data_pkl/cda_dev_features.pkl'
 
 
 if __name__ == '__main__':
     # format_json(DATA_PATH, DATA_SAVE_PATH)
     # format_json(UNLABELED_DATA_PATH, UNLABELED_DATA_SAVE_PATH)
-    examples = read_examples(DATA_SAVE_PATH, MODEL_NAME)
+    # examples = read_examples(DATA_SAVE_PATH, MODEL_NAME)
+    examples = read_eda_examples(EDA_PATH, MODEL_NAME)
     train_examples, dev_examples = split_examples(examples)
     train_sequence_len, train_sentence_num, train_ab_sentence_num = max_sentence_len(train_examples)
     dev_sequence_len, dev_sentence_num, dev_ab_sentence_num = max_sentence_len(dev_examples)

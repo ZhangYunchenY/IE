@@ -1,5 +1,4 @@
 import sys
-
 sys.path.append('..')
 import torch
 from tqdm import tqdm
@@ -10,16 +9,17 @@ from torch.utils.tensorboard import SummaryWriter
 from IE.model import BertModelForInformationExtract as BIO
 from transformers import BertConfig, AdamW, get_linear_schedule_with_warmup
 
-EPOCH = 50
-BATCH_SIZE = 24
+EPOCH = 25
+BATCH_SIZE = 36
 LOG_PATH = './log'
 DATA_SAVE_PATH = './_data/processed_data.json'
+CDA_DATA_PATH = './_data/cda_data.json'
 TRAIN_FEATURE_PATH = './data_pkl/train_features.pkl'
 DEV_FEATURE_PATH = './data_pkl/dev_features.pkl'
 MODEL_SAVE_PATH = './trained_model/MRC4BIO_epoch_'
 MODEL_SUFFIX = '.pt'
-# MODEL_NAME = 'bert-base-chinese'
-MODEL_NAME = 'hfl/chinese-roberta-wwm-ext-large'
+MODEL_NAME = 'bert-base-chinese'
+# MODEL_NAME = 'hfl/chinese-roberta-wwm-ext-large'
 
 
 def loading_model(model_name):
@@ -33,7 +33,7 @@ def train(model, train_dataloader):
     model.cuda()
     # Set optimizer and scheduler
     total_step = EPOCH * len(train_dataloader)
-    optimizer = AdamW(model.parameters(), lr=1e-5, weight_decay=0.01)
+    optimizer = AdamW(model.parameters(), lr=3e-5, weight_decay=0.01)
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=10,
                                                 num_training_steps=total_step)
     # tensor board
@@ -129,6 +129,7 @@ def validation(model, dev_dataloader, mode, m_features, m_examples):
 
 if __name__ == '__main__':
     examples = P.read_examples(DATA_SAVE_PATH, 'bert-base-chinese')
+    # examples = P.read_eda_examples(CDA_DATA_PATH, 'bert-base-chinese')
     train_examples, dev_examples = P.split_examples(examples)
     print(f'Train dataset size: {len(train_examples)}, dev dataset size: {len(dev_examples)}')
     train_features = P.pkl_reader(TRAIN_FEATURE_PATH)
