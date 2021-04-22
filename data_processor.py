@@ -16,6 +16,7 @@ UNLABELED_DATA_SAVE_PATH = './_data/unlabeled_content.json'
 
 
 class Example:
+
     def __init__(self,
                  key: str,
                  question: str,

@@ -19,7 +19,8 @@
 
   - 参考predictor.py中的类Predictor，必须实现predict函数，输入输出不能修改，每次预测一条数据
   - 代码中不要指定显卡等其他环境变量，如有特殊情况，请在readme中备注
-
+  - 最小的模型超过了传输限制，采用云盘的形式保存[url](https://drive.google.com/file/d/1DhASp98LY_0JI7NOVxxgnQ8RQkUQz9eB/view?usp=sharing)
+  	
 - 其他文件、代码格式不限
 
   ​

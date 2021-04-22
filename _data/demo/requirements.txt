@@ -1,0 +1,9 @@
+transformers==4.1.1
+tqdm==4.46.0
+numpy==1.19.2
+sklearn==0.0
+tensorboard==2.4.0
+--find-links https://download.pytorch.org/whl/torch_stable.html
+torch==1.7.1+cu101
+torchvision==0.8.2+cu101
+torchaudio==0.7.2

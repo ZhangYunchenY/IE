@@ -12,8 +12,8 @@ DEV_FEATURES_PATH = './data_pkl/cda_dev_features.pkl'
 
 
 if __name__ == '__main__':
-    # format_json(DATA_PATH, DATA_SAVE_PATH)
-    # format_json(UNLABELED_DATA_PATH, UNLABELED_DATA_SAVE_PATH)
+    format_json(DATA_PATH, DATA_SAVE_PATH)
+    format_json(UNLABELED_DATA_PATH, UNLABELED_DATA_SAVE_PATH)
     # examples = read_examples(DATA_SAVE_PATH, MODEL_NAME)
     examples = read_eda_examples(EDA_PATH, MODEL_NAME)
     train_examples, dev_examples = split_examples(examples)
